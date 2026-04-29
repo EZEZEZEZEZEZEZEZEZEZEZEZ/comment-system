@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>老師評價與吐槽牆 - 離線版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b; /* zinc-950 */
+            color: #f4f4f5; /* zinc-100 */
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .waterfall-grid {
+            column-count: 1;
+            column-gap: 1.25rem;
+        }
+        @media (min-width: 640px) { .waterfall-grid { column-count: 2; } }
+        @media (min-width: 1024px) { .waterfall-grid { column-count: 3; } }
+
+        .waterfall-item {
+            break-inside: avoid;
+            margin-bottom: 1.25rem;
+        }
+
+        .modal-enter { animation: modalIn 0.3s ease-out forwards; }
+        @keyframes modalIn {
+            from { opacity: 0; transform: translate(-50%, -45%) scale(0.95); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-24">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-amber-500 rounded-xl text-black">
+                    <i data-lucide="message-square-quote"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">老師評價與吐槽牆</h1>
+                    <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Local Storage Edition</p>
+                </div>
+            </div>
+            <button onclick="toggleModal(true)" class="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl transition-all active:scale-95">
+                <i data-lucide="plus" size="18"></i>
+                <span>發表評價</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 pt-8">
+        <!-- Filters Area -->
+        <div class="space-y-4 mb-8">
+            <div class="relative group">
+                <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size="20"></i>
+                <input type="text" id="searchInput" oninput="renderList()" placeholder="搜尋老師姓名..." 
+                    class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-zinc-100 focus:outline-none focus:border-amber-500/50 transition-all">
+            </div>
+
+            <!-- Status & Stats -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3 overflow-x-auto no-scrollbar" id="statusFilters">
+                    <div class="flex items-center gap-2 text-zinc-500 mr-2 shrink-0">
+                        <i data-lucide="layers" size="16"></i>
+                        <span class="text-sm font-medium">狀態:</span>
+                    </div>
+                    <button onclick="setStatusFilter('all')" data-status="all" class="status-btn px-4 py-2 rounded-full text-sm font-medium border bg-amber-500 text-black border-amber-500">全部 <span class="ml-1 opacity-60" id="count-total">0</span></button>
+                    <button onclick="setStatusFilter('active')" data-status="active" class="status-btn px-4 py-2 rounded-full text-sm font-medium border bg-zinc-900 text-zinc-400 border-zinc-800">只看 active <span class="ml-1 opacity-60" id="count-active">0</span></button>
+                    <button onclick="setStatusFilter('done')" data-status="done" class="status-btn px-4 py-2 rounded-full text-sm font-medium border bg-zinc-900 text-zinc-400 border-zinc-800">只看 done <span class="ml-1 opacity-60" id="count-done">0</span></button>
+                </div>
+            </div>
+
+            <!-- Categories -->
+            <div class="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar" id="categoryFilters">
+                <div class="flex items-center gap-2 text-zinc-500 mr-2 shrink-0">
+                    <i data-lucide="filter" size="16"></i>
+                    <span class="text-sm font-medium">分類:</span>
+                </div>
+                <button onclick="setCategoryFilter('全部')" data-cat="全部" class="cat-btn px-4 py-2 rounded-full text-sm font-medium border bg-amber-500/10 text-amber-500 border-amber-500/30">全部</button>
+                <button onclick="setCategoryFilter('教學風格')" data-cat="教學風格" class="cat-btn px-4 py-2 rounded-full text-sm font-medium bg-zinc-900 text-zinc-400 border border-zinc-800">教學風格</button>
+                <button onclick="setCategoryFilter('功課份量')" data-cat="功課份量" class="cat-btn px-4 py-2 rounded-full text-sm font-medium bg-zinc-900 text-zinc-400 border border-zinc-800">功課份量</button>
+                <button onclick="setCategoryFilter('評分標準')" data-cat="評分標準" class="cat-btn px-4 py-2 rounded-full text-sm font-medium bg-zinc-900 text-zinc-400 border border-zinc-800">評分標準</button>
+                <button onclick="setCategoryFilter('其他')" data-cat="其他" class="cat-btn px-4 py-2 rounded-full text-sm font-medium bg-zinc-900 text-zinc-400 border border-zinc-800">其他</button>
+            </div>
+        </div>
+
+        <!-- List Area -->
+        <div id="reviewGrid" class="waterfall-grid">
+            <!-- Cards injected here -->
+        </div>
+
+        <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-zinc-600 gap-4 text-center">
+            <i data-lucide="ghost" size="64"></i>
+            <div>
+                <p class="text-lg font-bold text-zinc-400">目前沒有資料</p>
+                <p class="text-sm">快來發表第一條評價吧！</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Form -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden" onclick="toggleModal(false)"></div>
+    <div id="reviewModal" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl p-6 z-50 shadow-2xl hidden max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold">發表評價 / 吐槽</h2>
+            <button onclick="toggleModal(false)" class="p-2 hover:bg-zinc-800 rounded-full text-zinc-400"><i data-lucide="x" size="20"></i></button>
+        </div>
+
+        <form onsubmit="handleFormSubmit(event)" class="space-y-5">
+            <div>
+                <label class="block text-sm font-medium text-zinc-400 mb-1.5">老師姓名</label>
+                <input type="text" id="teacherName" required placeholder="例如：陳大文 老師" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500 transition-colors">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-zinc-400 mb-1.5">星級評分</label>
+                <div class="flex gap-2" id="starRating">
+                    <input type="hidden" id="ratingInput" value="0">
+                    <button type="button" onclick="setRating(1)" class="star-btn p-1 text-zinc-700"><i data-lucide="star" size="28"></i></button>
+                    <button type="button" onclick="setRating(2)" class="star-btn p-1 text-zinc-700"><i data-lucide="star" size="28"></i></button>
+                    <button type="button" onclick="setRating(3)" class="star-btn p-1 text-zinc-700"><i data-lucide="star" size="28"></i></button>
+                    <button type="button" onclick="setRating(4)" class="star-btn p-1 text-zinc-700"><i data-lucide="star" size="28"></i></button>
+                    <button type="button" onclick="setRating(5)" class="star-btn p-1 text-zinc-700"><i data-lucide="star" size="28"></i></button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-zinc-400 mb-1.5">評價分類</label>
+                <div class="flex flex-wrap gap-2">
+                    <select id="categorySelect" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none">
+                        <option value="教學風格">教學風格</option>
+                        <option value="功課份量">功課份量</option>
+                        <option value="評分標準">評分標準</option>
+                        <option value="其他">其他</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-zinc-400 mb-1.5">評價內容</label>
+                <textarea id="content" required placeholder="寫下你的評價..." rows="4" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-amber-500 transition-colors resize-none"></textarea>
+            </div>
+
+            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all">
+                <i data-lucide="send" size="18"></i>
+                確定提交
+            </button>
+        </form>
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        // Global Filters
+        let currentStatusFilter = 'all';
+        let currentCategoryFilter = '全部';
+
+        // 1. saveData(newRecord)
+        function saveData(newRecord) {
+            const records = loadData();
+            records.push(newRecord);
+            localStorage.setItem("records", JSON.stringify(records));
+        }
+
+        // 2. loadData()
+        function loadData() {
+            const data = localStorage.getItem("records");
+            return data ? JSON.parse(data) : [];
+        }
+
+        // 3. renderList()
+        function renderList() {
+            const records = loadData();
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const grid = document.getElementById('reviewGrid');
+
+            // Update Counts
+            const activeCount = records.filter(r => r.status === 'active').length;
+            const doneCount = records.filter(r => r.status === 'done').length;
+            document.getElementById('count-total').textContent = records.length;
+            document.getElementById('count-active').textContent = activeCount;
+            document.getElementById('count-done').textContent = doneCount;
+
+            // Filter
+            let filtered = records.filter(r => {
+                const matchesSearch = r.teacherName.toLowerCase().includes(search);
+                const matchesCat = currentCategoryFilter === '全部' || r.category === currentCategoryFilter;
+                const matchesStatus = currentStatusFilter === 'all' || r.status === currentStatusFilter;
+                return matchesSearch && matchesCat && matchesStatus;
+            });
+
+            // Sort: Active top, Done bottom; Inside sort by createdAt desc
+            filtered.sort((a, b) => {
+                if (a.status === b.status) {
+                    return new Date(b.createdAt) - new Date(a.createdAt);
+                }
+                return a.status === 'active' ? -1 : 1;
+            });
+
+            // Render
+            grid.innerHTML = '';
+            if (filtered.length === 0) {
+                document.getElementById('emptyState').classList.remove('hidden');
+                grid.classList.add('hidden');
+            } else {
+                document.getElementById('emptyState').classList.add('hidden');
+                grid.classList.remove('hidden');
+                
+                filtered.forEach(record => {
+                    grid.appendChild(createCard(record));
+                });
+            }
+            lucide.createIcons();
+        }
+
+        // Helper UI Functions
+        function createCard(record) {
+            const div = document.createElement('div');
+            div.className = `waterfall-item bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 hover:border-amber-500/30 transition-all group relative overflow-hidden ${record.status === 'done' ? 'opacity-40 grayscale-[30%]' : ''}`;
+            
+            const isDone = record.status === 'done';
+            
+            div.innerHTML = `
+                ${isDone ? `
+                    <div class="absolute top-0 right-0 p-2 z-10">
+                        <div class="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded shadow-lg flex items-center gap-1">
+                            <i data-lucide="check-circle-2" size="10"></i> 已閱
+                        </div>
+                    </div>
+                ` : ''}
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <h3 class="text-lg font-bold text-zinc-100 group-hover:text-amber-400 transition-colors">${record.teacherName}</h3>
+                        <div class="flex gap-0.5 mt-1">
+                            ${Array(5).fill(0).map((_, i) => `
+                                <i data-lucide="star" size="14" class="${i < record.rating ? 'fill-amber-500 text-amber-500' : 'text-zinc-700'}"></i>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <span class="px-2 py-1 bg-zinc-800 text-zinc-400 text-xs rounded-lg flex items-center gap-1 shrink-0">
+                        <i data-lucide="tag" size="12"></i> ${record.category}
+                    </span>
+                </div>
+                <p class="text-zinc-300 text-sm leading-relaxed mb-4 whitespace-pre-wrap">${record.content}</p>
+                <div class="flex justify-between items-center pt-4 border-t border-zinc-800/50">
+                    <div class="flex flex-col gap-1">
+                        <div class="text-zinc-500 text-[10px] flex items-center gap-1">
+                            <i data-lucide="calendar" size="10"></i> ${new Date(record.createdAt).toLocaleDateString()}
+                        </div>
+                        <button onclick="toggleRecordStatus('${record.id}')" class="flex items-center gap-1.5 text-xs font-bold transition-colors ${isDone ? 'text-zinc-500 hover:text-amber-500' : 'text-amber-500/50 hover:text-amber-500'}">
+                            <i data-lucide="bookmark-check" size="14"></i> ${isDone ? '設為未閱' : '標記為已閱'}
+                        </button>
+                    </div>
+                    <button onclick="likeRecord('${record.id}')" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-800 hover:bg-amber-500/10 hover:text-amber-500 text-zinc-400 transition-all active:scale-95">
+                        <i data-lucide="thumbs-up" size="14"></i>
+                        <span class="text-xs font-medium">${record.likes || 0}</span>
+                    </button>
+                </div>
+            `;
+            return div;
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const rating = parseInt(document.getElementById('ratingInput').value);
+            if (rating === 0) return alert('請選擇星級評分');
+
+            const newRecord = {
+                id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                createdAt: new Date().toISOString(),
+                teacherName: document.getElementById('teacherName').value,
+                rating: rating,
+                category: document.getElementById('categorySelect').value,
+                content: document.getElementById('content').value,
+                likes: 0,
+                status: "active"
+            };
+
+            saveData(newRecord);
+            toggleModal(false);
+            e.target.reset();
+            setRating(0);
+            renderList();
+        }
+
+        function toggleRecordStatus(id) {
+            const records = loadData();
+            const updated = records.map(r => {
+                if (r.id === id) {
+                    return { ...r, status: r.status === 'active' ? 'done' : 'active' };
+                }
+                return r;
+            });
+            localStorage.setItem("records", JSON.stringify(updated));
+            renderList();
+        }
+
+        function likeRecord(id) {
+            const records = loadData();
+            const updated = records.map(r => {
+                if (r.id === id) {
+                    return { ...r, likes: (r.likes || 0) + 1 };
+                }
+                return r;
+            });
+            localStorage.setItem("records", JSON.stringify(updated));
+            renderList();
+        }
+
+        function setStatusFilter(status) {
+            currentStatusFilter = status;
+            document.querySelectorAll('.status-btn').forEach(btn => {
+                if (btn.getAttribute('data-status') === status) {
+                    btn.classList.add('bg-amber-500', 'text-black', 'border-amber-500');
+                    btn.classList.remove('bg-zinc-900', 'text-zinc-400', 'border-zinc-800');
+                } else {
+                    btn.classList.remove('bg-amber-500', 'text-black', 'border-amber-500');
+                    btn.classList.add('bg-zinc-900', 'text-zinc-400', 'border-zinc-800');
+                }
+            });
+            renderList();
+        }
+
+        function setCategoryFilter(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                if (btn.getAttribute('data-cat') === cat) {
+                    btn.classList.add('bg-amber-500/10', 'text-amber-500', 'border-amber-500/30');
+                    btn.classList.remove('bg-zinc-900', 'text-zinc-400', 'border-zinc-800');
+                } else {
+                    btn.classList.remove('bg-amber-500/10', 'text-amber-500', 'border-amber-500/30');
+                    btn.classList.add('bg-zinc-900', 'text-zinc-400', 'border-zinc-800');
+                }
+            });
+            renderList();
+        }
+
+        function toggleModal(show) {
+            const modal = document.getElementById('reviewModal');
+            const overlay = document.getElementById('modalOverlay');
+            if (show) {
+                modal.classList.remove('hidden');
+                overlay.classList.remove('hidden');
+                modal.classList.add('modal-enter');
+            } else {
+                modal.classList.add('hidden');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function setRating(val) {
+            document.getElementById('ratingInput').value = val;
+            const buttons = document.querySelectorAll('.star-btn');
+            buttons.forEach((btn, i) => {
+                const icon = btn.querySelector('i');
+                if (i < val) {
+                    btn.classList.add('text-amber-500');
+                    btn.classList.remove('text-zinc-700');
+                    icon.setAttribute('fill', '#f59e0b');
+                } else {
+                    btn.classList.remove('text-amber-500');
+                    btn.classList.add('text-zinc-700');
+                    icon.removeAttribute('fill');
+                }
+            });
+        }
+
+        // Initialize
+        window.onload = () => {
+            renderList();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
