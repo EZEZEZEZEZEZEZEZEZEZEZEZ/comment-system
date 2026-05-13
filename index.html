@@ -39,7 +39,6 @@
 </head>
 <body class="min-h-screen pb-24">
 
-    <!-- Header -->
     <header class="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
         <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
@@ -59,7 +58,6 @@
     </header>
 
     <main class="max-w-5xl mx-auto px-4 pt-8">
-        <!-- Filters Area -->
         <div class="space-y-4 mb-8">
             <div class="relative group">
                 <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size="20"></i>
@@ -67,7 +65,6 @@
                     class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-zinc-100 focus:outline-none focus:border-amber-500/50 transition-all">
             </div>
 
-            <!-- Status & Stats -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="flex items-center gap-3 overflow-x-auto no-scrollbar" id="statusFilters">
                     <div class="flex items-center gap-2 text-zinc-500 mr-2 shrink-0">
@@ -80,7 +77,6 @@
                 </div>
             </div>
 
-            <!-- Categories -->
             <div class="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar" id="categoryFilters">
                 <div class="flex items-center gap-2 text-zinc-500 mr-2 shrink-0">
                     <i data-lucide="filter" size="16"></i>
@@ -94,10 +90,8 @@
             </div>
         </div>
 
-        <!-- List Area -->
         <div id="reviewGrid" class="waterfall-grid">
-            <!-- Cards injected here -->
-        </div>
+            </div>
 
         <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-zinc-600 gap-4 text-center">
             <i data-lucide="ghost" size="64"></i>
@@ -108,7 +102,6 @@
         </div>
     </main>
 
-    <!-- Modal Form -->
     <div id="modalOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden" onclick="toggleModal(false)"></div>
     <div id="reviewModal" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl p-6 z-50 shadow-2xl hidden max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
@@ -158,26 +151,44 @@
         </form>
     </div>
 
-    <!-- JS Logic -->
     <script>
+        // 1. 在 script 最上方加入 APPS_SCRIPT_URL
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyFoKXuR-DSPFkdMFo47Dj0DqNUQhAbZXkMDNkpHallnn1b_jUXhNSYOCcUoVqqtQ1jHw/exec"; 
+
         // Global Filters
         let currentStatusFilter = 'all';
         let currentCategoryFilter = '全部';
 
-        // 1. saveData(newRecord)
+        // 2. 加入 syncToSheet(payload) helper
+        function syncToSheet(payload) {
+            if (APPS_SCRIPT_URL === "PASTE_YOUR_APPS_SCRIPT_URL_HERE" || !APPS_SCRIPT_URL) {
+                return;
+            }
+            fetch(APPS_SCRIPT_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .catch(err => {
+                console.warn("Sync to Google Sheet failed:", err);
+            });
+        }
+
+        // saveData(newRecord)
         function saveData(newRecord) {
             const records = loadData();
             records.push(newRecord);
             localStorage.setItem("records", JSON.stringify(records));
         }
 
-        // 2. loadData()
+        // loadData()
         function loadData() {
             const data = localStorage.getItem("records");
             return data ? JSON.parse(data) : [];
         }
 
-        // 3. renderList()
+        // renderList()
         function renderList() {
             const records = loadData();
             const search = document.getElementById('searchInput').value.toLowerCase();
@@ -274,6 +285,7 @@
             const rating = parseInt(document.getElementById('ratingInput').value);
             if (rating === 0) return alert('請選擇星級評分');
 
+            // 6. 確保具備 id 與 createdAt
             const newRecord = {
                 id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 createdAt: new Date().toISOString(),
@@ -286,6 +298,10 @@
             };
 
             saveData(newRecord);
+            
+            // 3. 找出新增 record 的位置，加入 syncToSheet
+            syncToSheet({ action: "create", record: newRecord });
+
             toggleModal(false);
             e.target.reset();
             setRating(0);
@@ -294,25 +310,57 @@
 
         function toggleRecordStatus(id) {
             const records = loadData();
+            let targetRecord = null;
+            
             const updated = records.map(r => {
                 if (r.id === id) {
-                    return { ...r, status: r.status === 'active' ? 'done' : 'active' };
+                    const updatedRecord = { ...r, status: r.status === 'active' ? 'done' : 'active' };
+                    targetRecord = updatedRecord;
+                    return updatedRecord;
                 }
                 return r;
             });
+            
             localStorage.setItem("records", JSON.stringify(updated));
+            
+            // 4. 找出修改 record 的位置，加入 syncToSheet
+            if (targetRecord) {
+                syncToSheet({ action: "update", id: targetRecord.id, changes: { status: targetRecord.status } });
+            }
+            
             renderList();
         }
 
         function likeRecord(id) {
             const records = loadData();
+            let targetRecord = null;
+
             const updated = records.map(r => {
                 if (r.id === id) {
-                    return { ...r, likes: (r.likes || 0) + 1 };
+                    const updatedRecord = { ...r, likes: (r.likes || 0) + 1 };
+                    targetRecord = updatedRecord;
+                    return updatedRecord;
                 }
                 return r;
             });
+            
             localStorage.setItem("records", JSON.stringify(updated));
+            
+            // 4. 找出修改 record 的位置，加入 syncToSheet
+            if (targetRecord) {
+                syncToSheet({ action: "update", id: targetRecord.id, changes: { likes: targetRecord.likes } });
+            }
+            
+            renderList();
+        }
+
+        // 5. 預留刪除 record 的操作邏輯 (供擴充參考)
+        function deleteRecord(id) {
+            const records = loadData();
+            const updated = records.filter(r => r.id !== id);
+            localStorage.setItem("records", JSON.stringify(updated));
+            
+            syncToSheet({ action: "delete", id: id });
             renderList();
         }
 
