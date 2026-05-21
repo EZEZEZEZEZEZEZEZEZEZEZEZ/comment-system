@@ -39,6 +39,7 @@
 </head>
 <body class="min-h-screen pb-24">
 
+    <!-- Header -->
     <header class="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50">
         <div class="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
@@ -50,14 +51,23 @@
                     <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Local Storage Edition</p>
                 </div>
             </div>
-            <button onclick="toggleModal(true)" class="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl transition-all active:scale-95">
-                <i data-lucide="plus" size="18"></i>
-                <span>發表評價</span>
-            </button>
+            
+            <!-- AI 摘要與新增按鈕 -->
+            <div class="flex items-center gap-3">
+                <button onclick="handleAISummary()" id="aiBtn" class="flex items-center gap-2 bg-zinc-800 text-zinc-100 px-4 py-2 rounded-full font-medium hover:bg-zinc-700 transition-colors active:scale-95 border border-zinc-700 disabled:opacity-50">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    <span id="aiBtnText">AI 摘要</span>
+                </button>
+                <button onclick="toggleModal(true)" class="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl transition-all active:scale-95">
+                    <i data-lucide="plus" size="18"></i>
+                    <span>發表評價</span>
+                </button>
+            </div>
         </div>
     </header>
 
     <main class="max-w-5xl mx-auto px-4 pt-8">
+        <!-- Filters Area -->
         <div class="space-y-4 mb-8">
             <div class="relative group">
                 <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size="20"></i>
@@ -65,6 +75,7 @@
                     class="w-full bg-zinc-900 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-zinc-100 focus:outline-none focus:border-amber-500/50 transition-all">
             </div>
 
+            <!-- Status & Stats -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="flex items-center gap-3 overflow-x-auto no-scrollbar" id="statusFilters">
                     <div class="flex items-center gap-2 text-zinc-500 mr-2 shrink-0">
@@ -77,6 +88,7 @@
                 </div>
             </div>
 
+            <!-- Categories -->
             <div class="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar" id="categoryFilters">
                 <div class="flex items-center gap-2 text-zinc-500 mr-2 shrink-0">
                     <i data-lucide="filter" size="16"></i>
@@ -90,8 +102,10 @@
             </div>
         </div>
 
+        <!-- List Area -->
         <div id="reviewGrid" class="waterfall-grid">
-            </div>
+            <!-- Cards injected here -->
+        </div>
 
         <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-zinc-600 gap-4 text-center">
             <i data-lucide="ghost" size="64"></i>
@@ -102,6 +116,7 @@
         </div>
     </main>
 
+    <!-- Modal Form -->
     <div id="modalOverlay" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden" onclick="toggleModal(false)"></div>
     <div id="reviewModal" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl p-6 z-50 shadow-2xl hidden max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-6">
@@ -151,46 +166,135 @@
         </form>
     </div>
 
+    <!-- JS Logic -->
     <script>
-        // 1. 在 script 最上方加入 APPS_SCRIPT_URL
-        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyFoKXuR-DSPFkdMFo47Dj0DqNUQhAbZXkMDNkpHallnn1b_jUXhNSYOCcUoVqqtQ1jHw/exec"; 
-
+        // 替換為你的 Web App URL，不要改變此變數名稱
+        const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE"; 
+        
         // Global Filters
         let currentStatusFilter = 'all';
         let currentCategoryFilter = '全部';
 
-        // 2. 加入 syncToSheet(payload) helper
-        function syncToSheet(payload) {
-            if (APPS_SCRIPT_URL === "PASTE_YOUR_APPS_SCRIPT_URL_HERE" || !APPS_SCRIPT_URL) {
-                return;
+        // 格式化後端資料：統一大小寫欄位
+        function normalizeRecord(record) {
+            return {
+                id: record.id || record.ID || "",
+                createdAt: record.createdAt || record.CreatedAt || "",
+                teacherName: record.teacherName || record.TeacherName || "",
+                rating: record.rating !== undefined ? record.rating : (record.Rating || 0),
+                content: record.content || record.Content || "",
+                category: record.category || record.Category || "其他",
+                likes: Number(record.likes !== undefined ? record.likes : (record.Likes || 0)),
+                status: record.status || record.Status || "active"
+            };
+        }
+
+        // 從 Sheet 獲取資料
+        async function fetchRecordsFromSheet() {
+            if (APPS_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbxN1h064joa7cnA3fP0U-vkRrdO803RFaMNhrSNNsAI6z_dd4er6kUoiogUyLaf0EZe/exec")) return null;
+            try {
+                const res = await fetch(APPS_SCRIPT_URL);
+                const data = await res.json();
+                const rawRecords = Array.isArray(data.records) ? data.records : (Array.isArray(data) ? data : null);
+                return rawRecords ? rawRecords.map(normalizeRecord) : null;
+            } catch (e) {
+                console.warn("從 Sheet 讀取失敗", e);
+                return null;
             }
+        }
+
+        // 同步 API Helper
+        function syncToSheet(payload) {
+            if (APPS_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbxN1h064joa7cnA3fP0U-vkRrdO803RFaMNhrSNNsAI6z_dd4er6kUoiogUyLaf0EZe/exec")) return;
             fetch(APPS_SCRIPT_URL, {
                 method: "POST",
                 headers: { "Content-Type": "text/plain" },
                 body: JSON.stringify(payload)
-            })
-            .then(res => res.json())
-            .catch(err => {
-                console.warn("Sync to Google Sheet failed:", err);
-            });
+            }).catch(e => console.warn("Sync failed", e));
         }
 
-        // saveData(newRecord)
-        function saveData(newRecord) {
-            const records = loadData();
-            records.push(newRecord);
-            localStorage.setItem("records", JSON.stringify(records));
-        }
-
-        // loadData()
-        function loadData() {
+        // 讀取資料：優先從 Sheet 讀，失敗則退回 localStorage
+        async function loadData() {
+            const remote = await fetchRecordsFromSheet();
+            if (remote) {
+                localStorage.setItem("records", JSON.stringify(remote));
+                return remote;
+            }
             const data = localStorage.getItem("records");
             return data ? JSON.parse(data) : [];
         }
 
-        // renderList()
-        function renderList() {
-            const records = loadData();
+        // 儲存資料到 Sheet 並即時渲染本機最新狀態
+        async function saveData(newRecord) {
+            const records = await loadData();
+            records.push(newRecord);
+            localStorage.setItem("records", JSON.stringify(records));
+            syncToSheet({ action: "create", record: newRecord });
+            await renderList(records);
+        }
+
+        // 點讚並更新 Sheet
+        async function likeRecord(id) {
+            const records = await loadData();
+            const index = records.findIndex(r => r.id === id);
+            if (index !== -1) {
+                records[index].likes = (records[index].likes || 0) + 1;
+                localStorage.setItem("records", JSON.stringify(records));
+                syncToSheet({ action: "update", id: id, changes: { likes: records[index].likes } });
+                await renderList(records);
+            }
+        }
+
+        // 切換狀態並更新 Sheet
+        async function toggleRecordStatus(id) {
+            const records = await loadData();
+            const index = records.findIndex(r => r.id === id);
+            if (index !== -1) {
+                records[index].status = records[index].status === 'active' ? 'done' : 'active';
+                localStorage.setItem("records", JSON.stringify(records));
+                syncToSheet({ action: "update", id: id, changes: { status: records[index].status } });
+                await renderList(records);
+            }
+        }
+
+        // AI 功能 Helper
+        async function askAI(userPrompt) {
+            if (APPS_SCRIPT_URL.includes("PASTE")) return "請先設定 APPS_SCRIPT_URL";
+            const res = await fetch(APPS_SCRIPT_URL, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain" },
+                body: JSON.stringify({ action: "askAI", prompt: userPrompt })
+            });
+            const data = await res.json();
+            return data.result || data.error || "AI 冇回應";
+        }
+
+        // AI 摘要 Handler
+        async function handleAISummary() {
+            const btn = document.getElementById('aiBtn');
+            const text = document.getElementById('aiBtnText');
+            btn.disabled = true;
+            text.textContent = '思考中...';
+            try {
+                const records = await loadData();
+                if (records.length === 0) { alert('未有吐槽資料可以摘要'); return; }
+                const summaryInput = records.slice(0, 30).map(r =>
+                    `[${r.category}] ${r.content}`
+                ).join('\n');
+                const prompt = '以下是班級吐槽牆嘅留言。請用繁體中文，用 3-5 句概括同學最關心嘅問題、情緒同有冇明顯 patterns:\n\n' + summaryInput;
+                const result = await askAI(prompt);
+                alert(result);
+            } catch (e) {
+                alert('AI 出錯：' + e.message);
+            } finally {
+                btn.disabled = false;
+                text.textContent = 'AI 摘要';
+            }
+        }
+
+        // 渲染列表 (若傳入 recordsOverride 則不重新 fetch Sheet，防止本機剛寫入的資料消失)
+        async function renderList(recordsOverride) {
+            const records = recordsOverride || await loadData();
             const search = document.getElementById('searchInput').value.toLowerCase();
             const grid = document.getElementById('reviewGrid');
 
@@ -203,7 +307,7 @@
 
             // Filter
             let filtered = records.filter(r => {
-                const matchesSearch = r.teacherName.toLowerCase().includes(search);
+                const matchesSearch = (r.teacherName || "").toLowerCase().includes(search);
                 const matchesCat = currentCategoryFilter === '全部' || r.category === currentCategoryFilter;
                 const matchesStatus = currentStatusFilter === 'all' || r.status === currentStatusFilter;
                 return matchesSearch && matchesCat && matchesStatus;
@@ -233,7 +337,7 @@
             lucide.createIcons();
         }
 
-        // Helper UI Functions
+        // 建立 UI 卡片
         function createCard(record) {
             const div = document.createElement('div');
             div.className = `waterfall-item bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 hover:border-amber-500/30 transition-all group relative overflow-hidden ${record.status === 'done' ? 'opacity-40 grayscale-[30%]' : ''}`;
@@ -280,12 +384,12 @@
             return div;
         }
 
-        function handleFormSubmit(e) {
+        // 表單提交
+        async function handleFormSubmit(e) {
             e.preventDefault();
             const rating = parseInt(document.getElementById('ratingInput').value);
             if (rating === 0) return alert('請選擇星級評分');
 
-            // 6. 確保具備 id 與 createdAt
             const newRecord = {
                 id: Date.now() + "_" + Math.random().toString(36).slice(2, 6),
                 createdAt: new Date().toISOString(),
@@ -297,74 +401,13 @@
                 status: "active"
             };
 
-            saveData(newRecord);
-            
-            // 3. 找出新增 record 的位置，加入 syncToSheet
-            syncToSheet({ action: "create", record: newRecord });
-
+            await saveData(newRecord);
             toggleModal(false);
             e.target.reset();
             setRating(0);
-            renderList();
         }
 
-        function toggleRecordStatus(id) {
-            const records = loadData();
-            let targetRecord = null;
-            
-            const updated = records.map(r => {
-                if (r.id === id) {
-                    const updatedRecord = { ...r, status: r.status === 'active' ? 'done' : 'active' };
-                    targetRecord = updatedRecord;
-                    return updatedRecord;
-                }
-                return r;
-            });
-            
-            localStorage.setItem("records", JSON.stringify(updated));
-            
-            // 4. 找出修改 record 的位置，加入 syncToSheet
-            if (targetRecord) {
-                syncToSheet({ action: "update", id: targetRecord.id, changes: { status: targetRecord.status } });
-            }
-            
-            renderList();
-        }
-
-        function likeRecord(id) {
-            const records = loadData();
-            let targetRecord = null;
-
-            const updated = records.map(r => {
-                if (r.id === id) {
-                    const updatedRecord = { ...r, likes: (r.likes || 0) + 1 };
-                    targetRecord = updatedRecord;
-                    return updatedRecord;
-                }
-                return r;
-            });
-            
-            localStorage.setItem("records", JSON.stringify(updated));
-            
-            // 4. 找出修改 record 的位置，加入 syncToSheet
-            if (targetRecord) {
-                syncToSheet({ action: "update", id: targetRecord.id, changes: { likes: targetRecord.likes } });
-            }
-            
-            renderList();
-        }
-
-        // 5. 預留刪除 record 的操作邏輯 (供擴充參考)
-        function deleteRecord(id) {
-            const records = loadData();
-            const updated = records.filter(r => r.id !== id);
-            localStorage.setItem("records", JSON.stringify(updated));
-            
-            syncToSheet({ action: "delete", id: id });
-            renderList();
-        }
-
-        function setStatusFilter(status) {
+        async function setStatusFilter(status) {
             currentStatusFilter = status;
             document.querySelectorAll('.status-btn').forEach(btn => {
                 if (btn.getAttribute('data-status') === status) {
@@ -375,10 +418,10 @@
                     btn.classList.add('bg-zinc-900', 'text-zinc-400', 'border-zinc-800');
                 }
             });
-            renderList();
+            await renderList();
         }
 
-        function setCategoryFilter(cat) {
+        async function setCategoryFilter(cat) {
             currentCategoryFilter = cat;
             document.querySelectorAll('.cat-btn').forEach(btn => {
                 if (btn.getAttribute('data-cat') === cat) {
@@ -389,7 +432,7 @@
                     btn.classList.add('bg-zinc-900', 'text-zinc-400', 'border-zinc-800');
                 }
             });
-            renderList();
+            await renderList();
         }
 
         function toggleModal(show) {
@@ -422,9 +465,9 @@
             });
         }
 
-        // Initialize
-        window.onload = () => {
-            renderList();
+        // 簡化後的 Initialize
+        window.onload = async () => {
+            await renderList();
             lucide.createIcons();
         };
     </script>
