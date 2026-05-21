@@ -168,8 +168,8 @@
 
     <!-- JS Logic -->
     <script>
-        // 替換為你的 Web App URL，不要改變此變數名稱
-        const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE"; 
+        // 替換為你的 Web App URL
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1s15t6oNfRvbe39P6IHcpuJDkZkQ5xczcGTKev6tu40A9SjHf5rgt53T-CveXuXwp/exec"; 
         
         // Global Filters
         let currentStatusFilter = 'all';
@@ -191,7 +191,8 @@
 
         // 從 Sheet 獲取資料
         async function fetchRecordsFromSheet() {
-            if (APPS_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbxN1h064joa7cnA3fP0U-vkRrdO803RFaMNhrSNNsAI6z_dd4er6kUoiogUyLaf0EZe/exec")) return null;
+            // 正確的檢查：只在包含 "PASTE" 時阻擋，避免還沒設定網址就出錯
+            if (APPS_SCRIPT_URL.includes("PASTE")) return null; 
             try {
                 const res = await fetch(APPS_SCRIPT_URL);
                 const data = await res.json();
@@ -205,7 +206,7 @@
 
         // 同步 API Helper
         function syncToSheet(payload) {
-            if (APPS_SCRIPT_URL.includes("https://script.google.com/macros/s/AKfycbxN1h064joa7cnA3fP0U-vkRrdO803RFaMNhrSNNsAI6z_dd4er6kUoiogUyLaf0EZe/exec")) return;
+            if (APPS_SCRIPT_URL.includes("PASTE")) return; 
             fetch(APPS_SCRIPT_URL, {
                 method: "POST",
                 headers: { "Content-Type": "text/plain" },
